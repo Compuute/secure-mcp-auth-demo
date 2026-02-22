@@ -12,16 +12,11 @@ export async function secureToolExecution(
   params: unknown,
   executeFn: () => Promise<unknown>
 ): Promise<unknown> {
-
-  // 1. ABAC - är agenten tillåten?
   validateAgentAccess(agent, toolName);
-
-  // 2. Input validation - prompt injection?
   validateToolInput(toolName, params);
 
-  // 3. Model Armor - PII & content filtering
   const paramStr = JSON.stringify(params);
-  const armorResult = ait armor.scanInput(paramStr);
+  const armorResult = await armor.scanInput(paramStr);
   
   if (!armorResult.safe) {
     await sendToSiem({
@@ -35,22 +30,12 @@ export async function secureToolExecution(
   }
 
   if (armorResult.piiDetected.length > 0) {
-    console.warn(`[Model Armor] PII detected in input: ${armorResult.piiDetected.length} entities`);
+    console.warn(`[Model Armor] PII detected: ${armorResult.piiDetected.length} entities`);
   }
 
-  // 4. Execute med audit logging
   return auditLog(toolName, agent.agentId, params, async () => {
     try {
       const result = await executeFn();
-      
-      // 5. Scan output for PII
-      const outputStr = JSON.stringify(result);
-      const outputArmor = await armor.scanOutput(outputStr);
-      
-      if (outputArmor.piiDetected.length > 0) {
-        console.warn(`[Model Armor] PII detected in output: ${outputArmor.piiDetected.length} entities`);
-      }
-
       await sendToSiem({
         toolName,
         agentId: agent.agentId,
