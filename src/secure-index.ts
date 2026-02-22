@@ -68,7 +68,7 @@ class SecureApiProductMcpServer extends McpServer {
 
           // *** SECURITY LAYER: Extract agent identity ***
           const agent: AgentIdentity = {
-            agentId: _extra?.meta?.agentId || 'unknown-agent',
+            agentId: _extra?._meta?.agentId || 'unknown-agent',
             allowedTools: ['*'], // TODO: Load from ABAC policy store
             trustLevel: 'medium'
           };
