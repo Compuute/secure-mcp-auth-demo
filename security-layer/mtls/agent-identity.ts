@@ -12,7 +12,6 @@ export function validateAgentAccess(
   agent: AgentIdentity,
   toolName: string
 ): void {
-  // Use ABAC policy engine
   const result = policyEngine.evaluateAccess(
     agent.agentId,
     toolName,
@@ -30,4 +29,4 @@ export function validateAgentAccess(
   );
 }
 
-export { AbacPolicyEngine 
+export { AbacPolicyEngine };
