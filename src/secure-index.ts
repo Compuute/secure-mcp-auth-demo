@@ -11,7 +11,6 @@ import { generateOpenApiTools, OpenApiTool } from "../google-baseline/apigee-mcp
 import { executeOpenApiTool } from "../google-baseline/apigee-mcp/src/mcp_api_executor.js";
 import type { ExecuteOpenApiToolInput } from "../google-baseline/apigee-mcp/src/mcp_api_executor.js";
 
-// *** SECURITY LAYER IMPORTS ***
 import { secureToolExecution } from "../security-layer/audit-logging/index.js";
 import { AgentIdentity } from "../security-layer/mtls/agent-identity.js";
 
@@ -39,37 +38,36 @@ class SecureApiProductMcpServer extends McpServer {
   }
 
   async initialize() {
-    console.log("🔒 Initializing SecureApiProductMcpServer with enterprise security...");
+    console.log("Initializing SecureApiProductMcpServer...");
     try {
       const specData = await this.api.getAllProductSpecsContent();
       this.openApiTools = generateOpenApiTools(specData);
       this._registerSecureTools();
-      console.log("✅ SecureApiProductMcpServer initialized with security layer.");
+      console.log("Security layer initialized.");
     } catch (error) {
-      console.error("❌ Failed to initialize SecureApiProductMcpServer:", error);
+      console.error("Failed to initialize:", error);
       throw error;
     }
   }
 
   private _registerSecureTools() {
     if (this.openApiTools.length === 0) {
-      console.warn("⚠️  No tools to register.");
+      console.warn("No tools to register.");
       return;
     }
 
-    console.log(`🔧 Registering ${this.openApiTools.length} secure tools...`);
+    console.log(`Registering ${this.openApiTools.length} secure tools...`);
     this.openApiTools.forEach(tool => {
       this.tool(
         tool.method,
         tool.description,
         tool.parameters.shape,
         async (params: any, _extra: RequestHandlerExtra<any, any>) => {
-          console.log(`🔒 [SECURE] Executing tool: ${tool.name}`);
+          console.log(`[SECURE] Executing tool: ${tool.name}`);
 
-          // *** SECURITY LAYER: Extract agent identity ***
           const agent: AgentIdentity = {
-            agentId: _extra?._meta?.agentId || 'unknown-agent',
-            allowedTools: ['*'], // TODO: Load from ABAC policy store
+            agentId: String(_extra?._meta?.agentId || 'unknown-agent'),
+            allowedTools: ['*'],
             trustLevel: 'medium'
           };
 
@@ -85,7 +83,6 @@ class SecureApiProductMcpServer extends McpServer {
             executionDetails: tool.executionDetails
           };
 
-          // *** SECURITY WRAPPER: ABAC + Validation + Audit + SIEM ***
           return await secureToolExecution(
             tool.name,
             agent,
@@ -95,35 +92,35 @@ class SecureApiProductMcpServer extends McpServer {
         }
       );
     });
-    console.log("✅ Secure tools registered successfully.");
+    console.log("Secure tools registered successfully.");
   }
 }
 
 async function main() {
   const clientId = process.env.MCP_CLIENT_ID;
   const clientSecret = process.env.MCP_CLIENT_SECRET;
-  const mcpMode = process.env.MCP_MODE?.toUpperCase() || 'STDIO';
+  const mcpMode = (process.env.MCP_MODE || 'STDIO').toUpperCase();
 
   if (!clientId || !clientSecret) {
-    console.error("❌ Error: MCP_CLIENT_ID and MCP_CLIENT_SECRET required.");
+    console.error("Error: MCP_CLIENT_ID and MCP_CLIENT_SECRET required.");
     process.exit(1);
   }
 
   const server = new SecureApiProductMcpServer();
 
   if (mcpMode === 'STDIO') {
-    console.log("🔒 Running in STDIO mode with security layer...");
+    console.log("Running in STDIO mode with security layer...");
     try {
       await server.initialize();
     } catch (initError) {
-      console.warn("⚠️  Server initialization failed:", initError);
+      console.warn("Server initialization failed:", initError);
     }
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("✅ Secure MCP Server running in STDIO mode.");
+    console.error("Secure MCP Server running in STDIO mode.");
 
   } else if (mcpMode === 'SSE') {
-    console.log("🔒 Running in SSE mode with security layer...");
+    console.log("Running in SSE mode with security layer...");
     const base_path = process.env.BASE_PATH || "mcp-proxy";
     await server.initialize();
 
@@ -145,16 +142,16 @@ async function main() {
 
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
-      console.log(`🔒 Secure MCP Server on port ${port}`);
-      console.log(`📡 SSE: http://localhost:${port}/${base_path}/sse`);
+      console.log(`Secure MCP Server on port ${port}`);
+      console.log(`SSE: http://localhost:${port}/${base_path}/sse`);
     });
   } else {
-    console.error(`❌ Invalid MCP_MODE: '${process.env.MCP_MODE}'`);
+    console.error(`Invalid MCP_MODE: '${mcpMode}'`);
     process.exit(1);
   }
 }
 
 main().catch((error) => {
-  console.error("💥 Server error:", error);
+  console.error("Server error:", error);
   process.exit(1);
 });

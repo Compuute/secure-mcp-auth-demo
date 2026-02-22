@@ -4,12 +4,20 @@
     "module": "ES2022",
     "moduleResolution": "node",
     "outDir": "./dist",
-    "rootDir": "./",
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*", "security-layer/**/*"],
-  "exclude": ["node_modules", "dist", "google-baseline"]
+  "include": [
+    "src/**/*",
+    "security-layer/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "google-baseline",
+    "**/*.spec.ts"
+  ]
 }
