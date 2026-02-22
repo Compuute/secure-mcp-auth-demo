@@ -1,0 +1,28 @@
+[
+  {
+    "id": "policy-production-agents",
+    "name": "Production Agent Access",
+    "agents": ["prod-agent-1", "prod-agent-2"],
+    "tools": ["*"],
+    "conditions": {
+      "trustLevel": ["high"],
+      "rateLimit": {
+        "requests": 1000,
+        "windowMs": 60000
+      }
+    }
+  },
+  {
+    "id": "policy-dev-agents",
+    "name": "Development Agent Access",
+    "agents": ["dev-*"],
+    "tools": ["get*", "list*", "test*"],
+    "conditions": {
+      "trustLevel": ["medium", "high"],
+      "rateLimit": {
+        "requests": 100,
+        "windowMs": 60000
+      }
+    }
+  }
+]
