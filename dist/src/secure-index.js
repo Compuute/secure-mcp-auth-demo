@@ -52,10 +52,9 @@ class SecureApiProductMcpServer extends McpServer {
         this.openApiTools.forEach(tool => {
             this.tool(tool.method, tool.description, tool.parameters.shape, async (params, _extra) => {
                 console.log(`🔒 [SECURE] Executing tool: ${tool.name}`);
-                // *** SECURITY LAYER: Extract agent identity ***
                 const agent = {
-                    agentId: _extra?.meta?.agentId || 'unknown-agent',
-                    allowedTools: ['*'], // TODO: Load from ABAC policy store
+                    agentId: String(_extra?._meta?.agentId || 'unknown-agent'),
+                    allowedTools: ['*'],
                     trustLevel: 'medium'
                 };
                 const getAuthHeaders = async () => {
@@ -68,7 +67,6 @@ class SecureApiProductMcpServer extends McpServer {
                     getAuthenticationHeaders: getAuthHeaders,
                     executionDetails: tool.executionDetails
                 };
-                // *** SECURITY WRAPPER: ABAC + Validation + Audit + SIEM ***
                 return await secureToolExecution(tool.name, agent, params, () => executeOpenApiTool(executionInput));
             });
         });
@@ -78,7 +76,7 @@ class SecureApiProductMcpServer extends McpServer {
 async function main() {
     const clientId = process.env.MCP_CLIENT_ID;
     const clientSecret = process.env.MCP_CLIENT_SECRET;
-    const mcpMode = process.env.MCP_MODE?.toUpperCase() || 'STDIO';
+    const mcpMode = (process.env.MCP_MODE || 'STDIO').toUpperCase();
     if (!clientId || !clientSecret) {
         console.error("❌ Error: MCP_CLIENT_ID and MCP_CLIENT_SECRET required.");
         process.exit(1);
@@ -121,7 +119,7 @@ async function main() {
         });
     }
     else {
-        console.error(`❌ Invalid MCP_MODE: '${process.env.MCP_MODE}'`);
+        console.error(`❌ Invalid MCP_MODE: '${mcpMode}'`);
         process.exit(1);
     }
 }
