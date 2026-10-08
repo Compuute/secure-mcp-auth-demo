@@ -1,157 +1,98 @@
 # Secure MCP Auth Demo
 
-Enterprise-grade security wrapper for Google's Model Context Protocol (MCP) server.
+A reference implementation of a security layer in front of an MCP (Model Context Protocol) server. It wraps Google's Apigee MCP sample and shows how agent identity, authorization, input filtering and audit logging can be layered on top.
 
-## 🔒 Security Features
+> **Status: demo / reference implementation.** It is built to illustrate patterns and to support threat-modelling discussions. It is not production-hardened and has not been independently audited.
 
-### What Google's Baseline Has
-- ✅ Basic OAuth 2.0 client credentials
-- ✅ API key validation
-- ✅ Rate limiting
-- ✅ API Hub integration
+## What is implemented
 
-### What We Add (Enterprise Security Layer)
-- ✅ **ABAC Authorization** - Fine-grained, policy-based tool access control
-- ✅ **mTLS Authentication** - Certificate-based agent identity
-- ✅ **Audit Logging** - OpenTelemetry traces with SIEM integration
-- ✅ **Prompt Injection Protection** - Input validation and content filtering
-- ✅ **PII Detection** - Model Armor integration for data privacy
-- ✅ **Multi-SIEM Support** - Chronicle, Splunk, Elastic backends
-- ✅ **Rate Limiting** - Per-agent, per-tool request throttling
+| Control | Implementation | Status |
+|---|---|---|
+| **ABAC authorization** | Policy engine per agent and tool, with trust levels and per-agent rate limits (`security-layer/mtls/abac-policy.ts`) | Implemented, unit-tested |
+| **mTLS agent identity** | Node TLS server with `requestCert` and `rejectUnauthorized`, plus a script for a local test CA (`security-layer/mtls/`) | Implemented, local test certificates only |
+| **Prompt-injection filter** | Pattern-based input validation (`security-layer/threat-protection/input-validator.ts`) | Implemented, basic. Pattern filters are easy to bypass; treat as one layer, not a defence on its own |
+| **PII detection** | Local regex detection of e-mail, card numbers and US-style phone and SSN formats (`security-layer/model-armor/`) | Implemented, basic. Google Model Armor is the intended production backend but is not called in this demo |
+| **Audit logging** | Structured events with OpenTelemetry (`security-layer/audit-logging/`) | Implemented |
+| **SIEM export** | Connector interfaces for Chronicle, Splunk HEC and Elastic (`siem-connectors.ts`) | Interfaces and configuration only; delivery is stubbed |
+| **Workload Identity** | Discussed in the threat model | Not implemented |
 
-## 📊 Architecture
+## Architecture
+
 ```
-Google's MCP Server (baseline)
-        ↓
-Secure Wrapper (src/secure-index.ts)
-        ↓
-Security Orchestrator
-        ↓
-├─ ABAC Policy Engine
-├─ Input Validator (prompt injection)
-├─ Model Armor (PII detection)
-├─ OTel Audit Logging
-└─ SIEM Integration
+MCP client / agent
+      │  mTLS
+      ▼
+Secure wrapper (src/secure-index.ts)
+      │
+      ├─ ABAC policy engine
+      ├─ Input validator (prompt-injection patterns)
+      ├─ PII detector
+      └─ Audit logging (OpenTelemetry → SIEM connectors)
+      │
+      ▼
+Google Apigee MCP sample (git submodule: google-baseline)
 ```
 
-## 🚀 Quick Start
+## Quick start
+
 ```bash
-# Install dependencies
+git clone --recurse-submodules https://github.com/Compuute/secure-mcp-auth-demo
+cd secure-mcp-auth-demo
 npm install
 
-# Generate mTLS certificates
-cd security-layer/mtls
-./generate-certs.sh
+# Local test CA and certificates (never use these outside a lab)
+cd security-layer/mtls && ./generate-certs.sh && cd -
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your credentials
-
-# Run server
+cp .env.example .env   # fill in the MCP base URL and client credentials
 npm run dev
 ```
 
-## 🧪 Testing
+## Tests
+
 ```bash
-# Run all tests
-npm test
-
-# Run tests with UI
-npm run test:ui
-
-# Coverage
 npm run test:run
 ```
 
-**Test Results:** 15/17 passing (88% pass rate)
+Current result: **18 of 18 tests pass** (unit tests for ABAC, input validation and PII detection, plus an end-to-end security flow). The tests run locally and do not need any cloud services.
 
-## 📁 Project Structure
-```
-secure-mcp-auth-demo/
-├── src/
-│   └── secure-index.ts          # Main secure wrapper
-├── security-layer/
-│   ├── audit-logging/           # OTel + SIEM
-│   ├── mtls/                    # Certs + ABAC
-│   ├── model-armor/             # PIi-cloud/             # Cloud portability
-├── google-baseline/             # Google's MCP (submodule)
-├── docs/
-│   ├── threat-model.md          # Security analysis
-│   ├── security-gaps.md         # Before/after comparison
-│   └── architecture.md          # Design decisions
-└── tests/
-    ├── unit/                    # Component tests
-    └── integration/             # E2E security flows
-```
+## ABAC policies
 
-## 🔐 Security Gaps Addressed
+Policies live in `security-layer/mtls/abac-policy.ts` (defaults) and can be loaded from JSON (see `policies.example.json`). Example of a narrowly scoped policy:
 
-| Gap | Google Baseline | Our Solution |
-|-----|----------------|--------------|
-| Authentication | Static API keys | mTLS + Workload Identity |
-| Authorization | Over-broad permissions | ABAC with policies |
-| Audit | No audit schema | OTel + SIEM integration |
-| Input Validation | None | Prompt injection detection |
-| PII Protection | None | Model Armor integration |
-| Compliance | Not addressed | SOC2/HIPAA ready |
-
-## 📚 Documentation
-
-- [Threat Model](docs/threat-model.md)
-- [Security Gaps Analysis](docs/security-gaps.md)
-- [Aity-layer/mtls/policies.example.json)
-
-## 🛠️ Configuration
-
-### SIEM Backends
-```bash
-# Chronicle (Google SecOps)
-CHRONICLE_ENDPOINT=https://...
-
-# Splunk HEC
-SPLUNK_HEC_ENDPOINT=https://...
-SPLUNK_HEC_TOKEN=...
-
-# Elastic
-ELASTIC_ENDPOINT=https://...
-```
-
-### ABAC Policies
-
-Edit `security-layer/mtls/abac-policy.ts` or load from JSON:
 ```json
 {
-  "id": "policy-admin",
-  "agents": ["admin-agent"],
-  "tools": ["*"],
+  "id": "policy-readonly",
+  "agents": ["reporting-agent"],
+  "tools": ["list_products", "get_product"],
   "conditions": {
-    "trustLevel": ["high"],
-    "rateLimit": { "requests": 1000, "windowMs": 60000 }
+    "trustLevel": ["medium", "high"],
+    "rateLimit": { "requests": 60, "windowMs": 60000 }
   }
 }
 ```
 
-## 📈 Performance
+Prefer explicit tool lists. Wildcard (`"*"`) grants are meant for local testing only.
 
-- **Overhead:** ~5ms per request (security layer)
-- **Throughput:** 1000+ req/s (with rate limiting)
-- **Memory:** +50MB (security components)
+## Documentation
 
-## 🤝 Contributing
+- [Threat model](docs/threat-model.md)
+- [Security gaps in the baseline](docs/security-gaps.md)
+- [Architecture decisions](docs/architecture.md)
 
-Built as a demonstration of enterprise AI security patterns for fintech/healthtech.
+## Known limitations
 
-## 📄 License
+- Pattern-based prompt-injection and PII detection have false negatives. Production use needs a dedicated classifier or managed service.
+- SIEM delivery is stubbed; events are logged locally.
+- No load or performance testing has been done.
+- The upstream sample is pinned as a submodule; update it deliberately and re-run the tests.
 
-Apache 2.0 (matching Google's baseline)
+## License
 
-## 🔗 Links
+Apache 2.0, matching the Google baseline. Add a `LICENSE` file before reuse.
 
-- [Google MCP Baseline](https://github.com/GoogleCloudPlatform/apigee-samples/tree/main/apigee-mcp)
-- [Apigee AI Solutions](https://cloud.goutions/apigee-ai)
+## Links
+
+- [Google Apigee MCP sample](https://github.com/GoogleCloudPlatform/apigee-samples/tree/main/apigee-mcp)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 
----
-
-**Built with:** TypeScript, Express, OpenTelemetry, Vitest
-**Target:** Enterprise fintech/healthtech (US/EU/Nordic/UAE)
+Built with TypeScript, Express, OpenTelemetry and Vitest.
